@@ -65,6 +65,26 @@ button:disabled {
   filter: drop-shadow(0 4px 8px rgb(15 118 110 / 18%));
 }
 
+.brand-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.brand-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.brand-slogan {
+  max-width: 760px;
+  color: #52635b;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
 h1,
 h2,
 h3,
@@ -99,6 +119,10 @@ h3 {
 
 .status.is-ready {
   color: #166534;
+}
+
+.status.is-error {
+  color: #8d1f1f;
 }
 
 .icon-button {
@@ -190,6 +214,96 @@ h3 {
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
+}
+
+.file-queue,
+.download-list {
+  display: grid;
+  gap: 8px;
+}
+
+.file-queue-header,
+.download-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #53645c;
+  font-size: 13px;
+}
+
+.file-queue-header span,
+.download-list-header span {
+  color: #263b34;
+  font-weight: 700;
+}
+
+.queue-file {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #d7e2df;
+  border-radius: 8px;
+  color: #30443b;
+  background: #fbfdfc;
+}
+
+.queue-file.is-processing {
+  border-color: #c8d79b;
+  background: #fcfbef;
+}
+
+.queue-file.is-done {
+  border-color: #b7dbc8;
+  background: #edf9f1;
+}
+
+.queue-file.is-failed {
+  border-color: #e4a6a6;
+  background: #fff0f0;
+}
+
+.queue-file > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.queue-file strong,
+.queue-file small {
+  overflow-wrap: anywhere;
+}
+
+.queue-file strong {
+  font-size: 13px;
+}
+
+.queue-file small {
+  color: #64756d;
+  font-size: 12px;
+}
+
+.queue-message.is-error {
+  color: #8d1f1f;
+}
+
+.queue-file button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #d4ded9;
+  border-radius: 8px;
+  color: #52645d;
+  background: #ffffff;
+}
+
+.queue-file button:not(:disabled):hover {
+  border-color: #d99b9b;
+  color: #8d1f1f;
 }
 
 .field-group {
@@ -401,6 +515,12 @@ h3 {
 .project-meta-header button:hover {
   border-color: #96bcb0;
   color: #0f766e;
+}
+
+.project-about {
+  color: #53645c;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .download-card {
@@ -974,6 +1094,23 @@ textarea:focus,
 @media (max-width: 760px) {
   .app-shell {
     padding: 14px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .brand {
+    align-items: flex-start;
+  }
+
+  .brand-title {
+    gap: 3px;
+  }
+
+  .brand-slogan {
+    font-size: 12px;
   }
 
   .rules-toolbar {

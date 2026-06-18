@@ -1,4 +1,4 @@
-import { ChangeEvent, DragEvent, FormEvent, ReactNode, useEffect, useId, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   BookOpenText,
   CheckCircle2,
@@ -38,6 +38,8 @@ type RuleTab = "preview" | "settings" | "json";
 type RuleCategory = "page" | "body" | "headings" | "caption" | "directory" | "formula" | "visuals" | "pageNumber";
 type FontSizeUnit = "pt" | "word";
 type FormulaFormat = "linear" | "professional";
+type DeepSeekConnectionStatus = "idle" | "checking" | "connected" | "failed";
+type QueueFileStatus = "pending" | "processing" | "done" | "failed";
 
 type FontRule = {
   east_asia: string;
@@ -137,9 +139,19 @@ type FormattingRules = {
 };
 
 type DownloadState = {
+  id: string;
+  originalName: string;
   url: string;
   fileName: string;
   size: number;
+  warnings: string[];
+};
+
+type QueuedFile = {
+  id: string;
+  file: File;
+  status: QueueFileStatus;
+  message?: string;
 };
 
 type NumberFieldProps = {
@@ -178,10 +190,13 @@ type FontLoaderState = {
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
-const APP_VERSION = "0.1";
+const APP_VERSION = "0.12";
 const REPOSITORY_URL = "https://github.com/vluckyzhang/WordTidy";
 const TAGS_API = "https://api.github.com/repos/vluckyzhang/WordTidy/tags?per_page=1";
 const CONTACT_EMAIL = "vluckyzhang@163.con";
+const PROJECT_SLOGAN = "浏览器轻 UI + 后端 Word 排版引擎，上传文档，选择规则，输出规范的 Word 或 PDF。";
+const DOCUMENT_FILE_ACCEPT = ".doc,.docx,.md,.txt,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/plain";
+const ALLOWED_DOCUMENT_EXTENSIONS = new Set([".doc", ".docx", ".md", ".txt"]);
 
 const sponsorAssets = [
   { label: "微信赞助", src: "/赞助与社群/微信收款码.png" },
@@ -237,7 +252,7 @@ const categoryItems: Array<{ key: RuleCategory; label: string; icon: LucideIcon 
 ];
 
 function App() {
-  const [file, setFile] = useState<File | null>(null);
+  const [queuedFiles, setQueuedFiles] = useState<QueuedFile[]>([]);
   const [rules, setRules] = useState<FormattingRules | null>(null);
   const [defaultRules, setDefaultRules] = useState<FormattingRules | null>(null);
   const [rulesText, setRulesText] = useState("");
@@ -253,8 +268,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [download, setDownload] = useState<DownloadState | null>(null);
-  const [apiReady, setApiReady] = useState<boolean | null>(null);
+  const [downloads, setDownloads] = useState<DownloadState[]>([]);
+  const [deepseekStatus, setDeepseekStatus] = useState<DeepSeekConnectionStatus>("idle");
+  const [deepseekStatusMessage, setDeepseekStatusMessage] = useState("");
   const [installedFonts, setInstalledFonts] = useState<string[]>([]);
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [isLoadingFonts, setIsLoadingFonts] = useState(false);
@@ -262,21 +278,26 @@ function App() {
   const [isSponsorOpen, setIsSponsorOpen] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const downloadUrlsRef = useRef<string[]>([]);
 
   useEffect(() => {
     void loadDefaultRules();
-    void checkHealth();
   }, []);
 
   useEffect(() => {
-    return () => {
-      if (download?.url) {
-        URL.revokeObjectURL(download.url);
-      }
-    };
-  }, [download]);
+    if (mode === "ai") {
+      void checkDeepSeekConnection(false);
+    }
+  }, [mode]);
 
-  const canSubmit = useMemo(() => Boolean(file) && Boolean(rules) && !isLoading, [file, rules, isLoading]);
+  useEffect(() => {
+    return () => {
+      downloadUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      downloadUrlsRef.current = [];
+    };
+  }, []);
+
+  const canSubmit = useMemo(() => queuedFiles.length > 0 && Boolean(rules) && !isLoading, [queuedFiles.length, rules, isLoading]);
 
   async function loadDefaultRules() {
     try {
@@ -289,15 +310,6 @@ function App() {
       setDefaultRules(cloneRules(loadedRules));
     } catch (err) {
       setError(err instanceof Error ? err.message : "默认规则加载失败");
-    }
-  }
-
-  async function checkHealth() {
-    try {
-      const response = await fetch(`${API_BASE}/api/health`);
-      setApiReady(response.ok);
-    } catch {
-      setApiReady(false);
     }
   }
 
@@ -333,7 +345,7 @@ function App() {
       }
       const tags = await response.json();
       if (!Array.isArray(tags) || tags.length === 0) {
-        setUpdateMessage("当前仓库还没有远端标签，0.1 是本地首发版本。");
+        setUpdateMessage("当前仓库还没有远端标签，0.12 是本地首发版本。");
         return;
       }
       const latestTag = String(tags[0]?.name ?? "").replace(/^v/i, "");
@@ -367,21 +379,48 @@ function App() {
   }
 
   function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const selected = event.target.files?.[0] ?? null;
-    setSelectedFile(selected);
+    addFiles(event.target.files);
+    event.target.value = "";
   }
 
-  function setSelectedFile(selected: File | null) {
-    setFile(selected);
+  function addFiles(fileList: FileList | File[] | null | undefined) {
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) {
+      return;
+    }
+    const accepted = files.filter(isAllowedDocumentFile);
+    const rejected = files.filter((candidate) => !isAllowedDocumentFile(candidate));
+    if (accepted.length > 0) {
+      setQueuedFiles((current) => {
+        const existingKeys = new Set(current.map((item) => fileIdentity(item.file)));
+        const nextItems = accepted
+          .filter((candidate) => !existingKeys.has(fileIdentity(candidate)))
+          .map(createQueuedFile);
+        return [...current, ...nextItems];
+      });
+      setWarnings([]);
+    }
+    if (rejected.length > 0) {
+      setError(`已拒绝 ${rejected.length} 个文件：仅支持 Word、Markdown 和 TXT 文件。`);
+      return;
+    }
     setError("");
-    setWarnings([]);
-    clearDownload();
   }
 
   function onDropFile(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setIsDragActive(false);
-    setSelectedFile(event.dataTransfer.files?.[0] ?? null);
+    addFiles(event.dataTransfer.files);
+  }
+
+  function removeQueuedFile(id: string) {
+    if (isLoading) {
+      return;
+    }
+    setQueuedFiles((current) => current.filter((item) => item.id !== id));
+    setWarnings((current) => current.filter((warning) => !warning.startsWith(`${id}:`)));
+    removeDownloadsForFile(id);
+    setError("");
   }
 
   async function onRulesFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -401,11 +440,21 @@ function App() {
     }
   }
 
-  function clearDownload() {
-    if (download?.url) {
-      URL.revokeObjectURL(download.url);
-    }
-    setDownload(null);
+  function clearDownloads() {
+    downloadUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    downloadUrlsRef.current = [];
+    setDownloads([]);
+  }
+
+  function removeDownloadsForFile(id: string) {
+    setDownloads((current) => {
+      const removed = current.filter((item) => item.id === id);
+      removed.forEach((item) => {
+        URL.revokeObjectURL(item.url);
+        downloadUrlsRef.current = downloadUrlsRef.current.filter((url) => url !== item.url);
+      });
+      return current.filter((item) => item.id !== id);
+    });
   }
 
   function restoreDefaultRules() {
@@ -454,12 +503,19 @@ function App() {
     URL.revokeObjectURL(url);
   }
 
-  async function testDeepSeekApiKey() {
+  async function checkDeepSeekConnection(showInlineMessage = false) {
     setIsTestingApiKey(true);
-    setApiKeyTestMessage("");
-    setApiKeyTestOk(null);
+    setDeepseekStatus("checking");
+    setDeepseekStatusMessage("");
+    if (showInlineMessage) {
+      setApiKeyTestMessage("");
+      setApiKeyTestOk(null);
+    }
     const formData = new FormData();
-    formData.append("api_key", deepseekApiKey);
+    const apiKey = deepseekApiKey.trim();
+    if (apiKey) {
+      formData.append("api_key", apiKey);
+    }
     try {
       const response = await fetch(`${API_BASE}/api/deepseek/test`, {
         method: "POST",
@@ -470,20 +526,34 @@ function App() {
         throw new Error(detail);
       }
       const body = await response.json();
-      setApiKeyTestOk(true);
-      setApiKeyTestMessage(body.message ?? "DeepSeek API key 可用。");
+      const message = body.message ?? "DeepSeek API key 可用。";
+      setDeepseekStatus("connected");
+      setDeepseekStatusMessage(message);
+      if (showInlineMessage) {
+        setApiKeyTestOk(true);
+        setApiKeyTestMessage(message);
+      }
     } catch (err) {
-      setApiKeyTestOk(false);
-      setApiKeyTestMessage(err instanceof Error ? err.message : "DeepSeek API key 测试失败");
+      const message = err instanceof Error ? err.message : "DeepSeek API key 测试失败";
+      setDeepseekStatus("failed");
+      setDeepseekStatusMessage(message);
+      if (showInlineMessage) {
+        setApiKeyTestOk(false);
+        setApiKeyTestMessage(message);
+      }
     } finally {
       setIsTestingApiKey(false);
     }
   }
 
+  async function testDeepSeekApiKey() {
+    await checkDeepSeekConnection(true);
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file) {
-      setError("请选择 Word 文件");
+    if (queuedFiles.length === 0) {
+      setError("请选择 Word、Markdown 或 TXT 文件");
       return;
     }
     if (!rules) {
@@ -494,40 +564,70 @@ function App() {
     setIsLoading(true);
     setError("");
     setWarnings([]);
-    clearDownload();
+    clearDownloads();
+    setQueuedFiles((current) => current.map((item) => ({ ...item, status: "pending", message: undefined })));
 
-    const formData = new FormData();
     const rulesForSubmit = cloneRules(rules);
     if (mode !== "ai") {
       rulesForSubmit.formula.ai_enhanced_detection = false;
     }
-    formData.append("file", file);
-    formData.append("rules_json", JSON.stringify(rulesForSubmit));
-    formData.append("output_format", outputFormat);
-    formData.append("mode", mode);
-    formData.append("insert_directories", String(insertDirectories));
-    if (mode === "ai" && deepseekApiKey.trim()) {
-      formData.append("deepseek_api_key", deepseekApiKey.trim());
-    }
 
+    let failedCount = 0;
     try {
-      const response = await fetch(`${API_BASE}/api/format`, {
-        method: "POST",
-        body: formData
-      });
+      for (const item of queuedFiles) {
+        setQueuedFiles((current) => current.map((candidate) =>
+          candidate.id === item.id ? { ...candidate, status: "processing", message: "正在排版" } : candidate
+        ));
 
-      if (!response.ok) {
-        const detail = await readError(response);
-        throw new Error(detail);
+        const formData = new FormData();
+        formData.append("file", item.file);
+        formData.append("rules_json", JSON.stringify(rulesForSubmit));
+        formData.append("output_format", outputFormat);
+        formData.append("mode", mode);
+        formData.append("insert_directories", String(insertDirectories));
+        if (mode === "ai" && deepseekApiKey.trim()) {
+          formData.append("deepseek_api_key", deepseekApiKey.trim());
+        }
+
+        try {
+          const response = await fetch(`${API_BASE}/api/format`, {
+            method: "POST",
+            body: formData
+          });
+
+          if (!response.ok) {
+            const detail = await readError(response);
+            throw new Error(detail);
+          }
+
+          const fileWarnings = parseWarnings(response.headers.get("X-WordTidy-Warnings"));
+          if (fileWarnings.length > 0) {
+            setWarnings((current) => [...current, ...fileWarnings.map((warning) => `${item.file.name}：${warning}`)]);
+          }
+
+          const blob = await response.blob();
+          const fileName = getDownloadFileName(response, item.file.name, outputFormat);
+          const url = URL.createObjectURL(blob);
+          downloadUrlsRef.current.push(url);
+          setDownloads((current) => [
+            ...current,
+            { id: item.id, originalName: item.file.name, url, fileName, size: blob.size, warnings: fileWarnings }
+          ]);
+          setQueuedFiles((current) => current.map((candidate) =>
+            candidate.id === item.id ? { ...candidate, status: "done", message: "已完成" } : candidate
+          ));
+        } catch (err) {
+          failedCount += 1;
+          const message = err instanceof Error ? err.message : "排版处理失败";
+          setQueuedFiles((current) => current.map((candidate) =>
+            candidate.id === item.id ? { ...candidate, status: "failed", message } : candidate
+          ));
+        }
       }
 
-      const warningHeader = response.headers.get("X-WordTidy-Warnings");
-      setWarnings(parseWarnings(warningHeader));
-
-      const blob = await response.blob();
-      const fileName = getDownloadFileName(response, file.name, outputFormat);
-      const url = URL.createObjectURL(blob);
-      setDownload({ url, fileName, size: blob.size });
+      if (failedCount > 0) {
+        setError(`${failedCount} 个文件处理失败，请查看队列中的失败原因。`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "排版处理失败");
     } finally {
@@ -540,16 +640,38 @@ function App() {
       <header className="topbar">
         <div className="brand">
           <FileText size={24} aria-hidden="true" />
-          <div>
-            <h1>WordTidy</h1>
-            <span className={apiReady ? "status is-ready" : "status"}>
-              {apiReady === null ? "连接中" : apiReady ? "API 已连接" : "API 未连接"}
-            </span>
+          <div className="brand-copy">
+            <div className="brand-title">
+              <h1>WordTidy</h1>
+              <span className="brand-slogan">{PROJECT_SLOGAN}</span>
+            </div>
+            {mode === "ai" && (
+              <span
+                className={`status ${deepseekStatus === "connected" ? "is-ready" : ""} ${deepseekStatus === "failed" ? "is-error" : ""}`}
+                title={deepseekStatusMessage}
+              >
+                {deepseekStatus === "checking"
+                  ? "DeepSeek API 检测中"
+                  : deepseekStatus === "connected"
+                    ? "DeepSeek API 已连接"
+                    : deepseekStatus === "failed"
+                      ? "DeepSeek API 未连接"
+                      : "DeepSeek API 待检测"}
+              </span>
+            )}
           </div>
         </div>
-        <button className="icon-button" type="button" onClick={checkHealth} title="刷新 API 状态">
-          <RefreshCw size={18} aria-hidden="true" />
-        </button>
+        {mode === "ai" && (
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => void checkDeepSeekConnection(false)}
+            disabled={isTestingApiKey}
+            title="刷新 DeepSeek API 状态"
+          >
+            {isTestingApiKey ? <Loader2 className="spin" size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
+          </button>
+        )}
       </header>
 
       <form className="workspace" onSubmit={onSubmit}>
@@ -568,13 +690,41 @@ function App() {
             onDrop={onDropFile}
           >
             <UploadCloud size={34} aria-hidden="true" />
-            <span>{file ? file.name : "选择 .docx、.doc、.txt 或 .md"}</span>
-            <small>点击选择或拖动文件到此处</small>
-            <input type="file" accept=".doc,.docx,.txt,.md,text/plain,text/markdown" onChange={onFileChange} />
+            <span>{queuedFiles.length > 0 ? `已选择 ${queuedFiles.length} 个文件` : "选择 Word、Markdown 或 TXT 文件"}</span>
+            <small>支持 .doc、.docx、.md、.txt，可多选或拖动多个文件到此处</small>
+            <input type="file" multiple accept={DOCUMENT_FILE_ACCEPT} onChange={onFileChange} />
           </label>
 
+          {queuedFiles.length > 0 && (
+            <div className="file-queue" aria-label="待排版文件队列">
+              <div className="file-queue-header">
+                <span>排版队列</span>
+                <small>{queuedFiles.length} 个文件</small>
+              </div>
+              {queuedFiles.map((item) => (
+                <article className={`queue-file is-${item.status}`} key={item.id}>
+                  <FileText size={18} aria-hidden="true" />
+                  <span>
+                    <strong>{item.file.name}</strong>
+                    <small>{formatBytes(item.file.size)} · {queueStatusLabel(item.status)}</small>
+                    {item.message && <small className={item.status === "failed" ? "queue-message is-error" : "queue-message"}>{item.message}</small>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeQueuedFile(item.id)}
+                    disabled={isLoading}
+                    aria-label={`删除 ${item.file.name}`}
+                    title="删除文件"
+                  >
+                    <X size={16} aria-hidden="true" />
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+
           <div className="field-group">
-            <span className="field-label">模式</span>
+            <span className="field-label">功能模式</span>
             <div className="segmented">
               <button
                 type="button"
@@ -589,7 +739,7 @@ function App() {
                 }}
               >
                 <Settings2 size={16} aria-hidden="true" />
-                标准
+                标准模式
               </button>
               <button
                 type="button"
@@ -598,7 +748,7 @@ function App() {
               >
                 <span className="experiment-badge">实验功能</span>
                 <Sparkles size={16} aria-hidden="true" />
-                AI
+                AI模式
               </button>
             </div>
           </div>
@@ -615,11 +765,13 @@ function App() {
                     setDeepseekApiKey(event.target.value);
                     setApiKeyTestMessage("");
                     setApiKeyTestOk(null);
+                    setDeepseekStatus("idle");
+                    setDeepseekStatusMessage("");
                   }}
                   placeholder="不填写则使用后端环境变量"
                 />
               </label>
-              <button className="secondary-action" type="button" onClick={testDeepSeekApiKey} disabled={isTestingApiKey || !deepseekApiKey.trim()}>
+              <button className="secondary-action" type="button" onClick={testDeepSeekApiKey} disabled={isTestingApiKey}>
                 {isTestingApiKey ? <Loader2 className="spin" size={16} aria-hidden="true" /> : <Sparkles size={16} aria-hidden="true" />}
                 测试连接
               </button>
@@ -660,7 +812,7 @@ function App() {
 
           <button className="primary-button" type="submit" disabled={!canSubmit}>
             {isLoading ? <Loader2 className="spin" size={18} aria-hidden="true" /> : <FileText size={18} aria-hidden="true" />}
-            {isLoading ? "处理中" : "开始排版"}
+            {isLoading ? "队列排版中" : `开始队列排版${queuedFiles.length > 0 ? `（${queuedFiles.length}）` : ""}`}
           </button>
 
           <div className="project-meta">
@@ -675,6 +827,7 @@ function App() {
               </button>
             </div>
             {updateMessage && <p className="meta-status">{updateMessage}</p>}
+            <p className="project-about">关于：{PROJECT_SLOGAN}</p>
             <div className="meta-links">
               <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">
                 <Github size={15} aria-hidden="true" />
@@ -693,15 +846,24 @@ function App() {
             <p className="copyright">Copyright © 2026 vluckyzhang. Released under the MIT License.</p>
           </div>
 
-          {download && (
-            <a className="download-card" href={download.url} download={download.fileName}>
-              <CheckCircle2 size={20} aria-hidden="true" />
-              <span>
-                <strong>{download.fileName}</strong>
-                <small>{formatBytes(download.size)}</small>
-              </span>
-              <Download size={18} aria-hidden="true" />
-            </a>
+          {downloads.length > 0 && (
+            <div className="download-list" aria-label="排版结果下载">
+              <div className="download-list-header">
+                <span>排版结果</span>
+                <small>{downloads.length} 个文件已完成</small>
+              </div>
+              {downloads.map((download) => (
+                <a className="download-card" href={download.url} download={download.fileName} key={`${download.id}-${download.fileName}`}>
+                  <CheckCircle2 size={20} aria-hidden="true" />
+                  <span>
+                    <strong>{download.fileName}</strong>
+                    <small>{download.originalName} · {formatBytes(download.size)}</small>
+                    {download.warnings.length > 0 && <small>{download.warnings.length} 条提示</small>}
+                  </span>
+                  <Download size={18} aria-hidden="true" />
+                </a>
+              ))}
+            </div>
           )}
 
           {warnings.length > 0 && (
@@ -1197,7 +1359,7 @@ function FormulaSettings({
             <span>去除 $$ / \\( \\) 分隔符</span>
           </label>
         </div>
-        {!aiAvailable && <p className="hint-text">AI增强识别功能仅在左侧选择 AI 模式后可用。</p>}
+        {!aiAvailable && <p className="hint-text">AI增强识别功能仅在左侧选择“AI模式”后可用。</p>}
         <div className="form-grid">
           <SelectField label="公式格式" value={rules.formula.format} options={formulaFormatOptions} onChange={(value) => updateRules((draft) => { draft.formula.format = value; })} />
           <FontField
@@ -1540,6 +1702,41 @@ function getDownloadFileName(response: Response, originalName: string, outputFor
   }
   const stem = originalName.replace(/\.[^.]+$/, "");
   return `已排版_${stem}.${outputFormat}`;
+}
+
+function isAllowedDocumentFile(file: File) {
+  return ALLOWED_DOCUMENT_EXTENSIONS.has(getFileExtension(file.name));
+}
+
+function getFileExtension(fileName: string) {
+  const match = fileName.toLowerCase().match(/\.[^.]+$/);
+  return match?.[0] ?? "";
+}
+
+function fileIdentity(file: File) {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function createQueuedFile(file: File): QueuedFile {
+  const randomPart = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+  return {
+    id: `${fileIdentity(file)}-${randomPart}`,
+    file,
+    status: "pending"
+  };
+}
+
+function queueStatusLabel(status: QueueFileStatus) {
+  if (status === "processing") {
+    return "处理中";
+  }
+  if (status === "done") {
+    return "已完成";
+  }
+  if (status === "failed") {
+    return "失败";
+  }
+  return "等待中";
 }
 
 function formatBytes(value: number) {

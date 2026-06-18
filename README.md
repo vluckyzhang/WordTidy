@@ -2,7 +2,7 @@
 
 > 浏览器轻 UI + 后端 Word 排版引擎。上传文档，选择规则，输出规范的 Word 或 PDF。
 
-[![Version](https://img.shields.io/badge/version-0.12-0f766e)](https://github.com/vluckyzhang/WordTidy/releases)
+[![Version](https://img.shields.io/badge/version-0.15-0f766e)](https://github.com/vluckyzhang/WordTidy/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)](backend)
 [![React](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61dafb)](frontend)
@@ -17,7 +17,7 @@
 
 WordTidy 是一个面向论文、报告、制度文件和批量文档整理场景的 Word 自动排版工具。它采用“浏览器轻 UI + 后端文档排版引擎”的结构，前端负责上传、规则编辑和交互，后端负责解析文档、应用确定性排版规则并输出文件。
 
-当前版本号为 `0.12`，重点补强多文件上传、队列排版、文件删除、联系信息展示和桌面程序包启动体验。
+当前版本号为 `0.15`，重点完善排版规则资源命名、README 架构图、联系邮箱复制和桌面程序包发布体验。
 
 ## 功能亮点
 
@@ -52,16 +52,7 @@ AI：DeepSeek API
 
 ## 架构
 
-```mermaid
-flowchart LR
-  A["浏览器 UI"] --> B["FastAPI 后端"]
-  B --> C["文档导入与转换"]
-  C --> D["结构识别"]
-  D --> E["规则排版引擎"]
-  E --> F["DOCX / PDF 输出"]
-  D -. "AI 模式" .-> G["DeepSeek 语义识别"]
-  G -. "结构化标签" .-> E
-```
+![WordTidy 简约架构图](文档资源/WordTidy_简约架构图.png)
 
 ## 本地运行
 
@@ -69,8 +60,8 @@ flowchart LR
 
 从 GitHub Releases 下载对应平台程序包：
 
-- Windows：解压 `WordTidy_v0.12_Windows_executable.zip`，运行 `WordTidy.exe`。
-- macOS：解压 `WordTidy_v0.12_macOS_executable.zip`，运行 `WordTidy`。
+- Windows：解压 `WordTidy_v0.15_Windows_executable.zip`，运行 `WordTidy.exe`。
+- macOS：解压 `WordTidy_v0.15_macOS_executable.zip`，运行 `WordTidy`。
 
 程序启动后会自动打开浏览器访问本地 WordTidy。使用完成后关闭启动窗口即可停止服务。
 
@@ -150,10 +141,10 @@ Docker 镜像内已安装 LibreOffice。
 - 图表：三线表、图片居中。
 - 页码：目录罗马数字、正文阿拉伯数字。
 
-示例规则文件：
+排版规则预设文件：
 
 ```text
-示例/论文排版预设.json
+排版规则/排版预设.json
 ```
 
 ## 目录结构
@@ -163,7 +154,7 @@ WordTidy/
   backend/                 FastAPI 后端与 Word 排版引擎
   frontend/                React + Vite 前端
   frontend/public/赞助与社群/ 赞助与交流群二维码资源
-  示例/                    排版规则示例
+  排版规则/                排版规则预设
   docker-compose.yml       Docker Compose 配置
   README.md
   LICENSE
@@ -193,7 +184,7 @@ WordTidy/
 
 ## 联系与交流
 
-邮箱：vluckyzhang@163.con
+邮箱：vluckyzhang@163.com
 
 交流群二维码：
 

@@ -480,7 +480,8 @@ h3 {
 .project-meta-header button,
 .meta-links button,
 .meta-links a,
-.contact-card {
+.contact-link,
+.copy-email-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -513,36 +514,56 @@ h3 {
 
 .meta-links button:hover,
 .meta-links a:hover,
-.contact-card:hover,
+.contact-link:hover,
+.copy-email-button:hover,
 .project-meta-header button:hover {
   border-color: #96bcb0;
   color: #0f766e;
 }
 
-.contact-card {
-  justify-content: flex-start;
-  min-height: 44px;
-  padding: 8px 10px;
-}
-
-.contact-card span {
+.contact-row {
   display: grid;
-  gap: 2px;
-  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
 
-.contact-card strong,
-.contact-card small {
+.contact-link {
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.contact-link span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.contact-link strong,
+.contact-link small {
   overflow-wrap: anywhere;
 }
 
-.contact-card strong {
+.contact-link strong {
+  flex: 0 0 auto;
   font-size: 12px;
 }
 
-.contact-card small {
+.contact-link small {
+  min-width: 0;
+  overflow: hidden;
   color: #65776e;
   font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+.copy-email-button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
 }
 
 .project-about {

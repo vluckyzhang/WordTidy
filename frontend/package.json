@@ -1,7 +1,7 @@
 {
   "name": "wordtidy-frontend",
   "private": false,
-  "version": "0.12.0",
+  "version": "0.15.0",
   "description": "浏览器轻 UI + 后端 Word 排版引擎，上传文档，选择规则，输出规范的 Word 或 PDF。",
   "license": "MIT",
   "repository": {

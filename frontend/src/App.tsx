@@ -3,6 +3,7 @@ import {
   BookOpenText,
   CheckCircle2,
   Code2,
+  Copy,
   ExternalLink,
   FileInput,
   Download,
@@ -190,10 +191,10 @@ type FontLoaderState = {
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
-const APP_VERSION = "0.12";
+const APP_VERSION = "0.15";
 const REPOSITORY_URL = "https://github.com/vluckyzhang/WordTidy";
 const TAGS_API = "https://api.github.com/repos/vluckyzhang/WordTidy/tags?per_page=1";
-const CONTACT_EMAIL = "vluckyzhang@163.con";
+const CONTACT_EMAIL = "vluckyzhang@163.com";
 const PROJECT_SLOGAN = "浏览器轻 UI + 后端 Word 排版引擎，上传文档，选择规则，输出规范的 Word 或 PDF。";
 const DOCUMENT_FILE_ACCEPT = ".doc,.docx,.md,.txt,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/plain";
 const ALLOWED_DOCUMENT_EXTENSIONS = new Set([".doc", ".docx", ".md", ".txt"]);
@@ -278,6 +279,7 @@ function App() {
   const [isSponsorOpen, setIsSponsorOpen] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isEmailCopied, setIsEmailCopied] = useState(false);
   const downloadUrlsRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -345,7 +347,7 @@ function App() {
       }
       const tags = await response.json();
       if (!Array.isArray(tags) || tags.length === 0) {
-        setUpdateMessage("当前仓库还没有远端标签，0.12 是本地首发版本。");
+        setUpdateMessage(`当前仓库还没有远端标签，当前版本为 v${APP_VERSION}。`);
         return;
       }
       const latestTag = String(tags[0]?.name ?? "").replace(/^v/i, "");
@@ -548,6 +550,17 @@ function App() {
 
   async function testDeepSeekApiKey() {
     await checkDeepSeekConnection(true);
+  }
+
+  async function copyContactEmail() {
+    try {
+      await navigator.clipboard.writeText(CONTACT_EMAIL);
+      setIsEmailCopied(true);
+      window.setTimeout(() => setIsEmailCopied(false), 1600);
+      setError("");
+    } catch {
+      setError("邮箱复制失败，请手动复制。");
+    }
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -839,13 +852,24 @@ function App() {
                 赞助作者
               </button>
             </div>
-            <a className="contact-card" href={`mailto:${CONTACT_EMAIL}`}>
-              <Mail size={16} aria-hidden="true" />
-              <span>
-                <strong>联系作者</strong>
-                <small>{CONTACT_EMAIL}</small>
-              </span>
-            </a>
+            <div className="contact-row">
+              <a className="contact-link" href={`mailto:${CONTACT_EMAIL}`}>
+                <Mail size={16} aria-hidden="true" />
+                <span>
+                  <strong>联系作者</strong>
+                  <small>{CONTACT_EMAIL}</small>
+                </span>
+              </a>
+              <button
+                className="copy-email-button"
+                type="button"
+                onClick={copyContactEmail}
+                aria-label="复制作者邮箱"
+                title={isEmailCopied ? "已复制" : "复制邮箱"}
+              >
+                {isEmailCopied ? <CheckCircle2 size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
+              </button>
+            </div>
             <p className="copyright">Copyright © 2026 vluckyzhang. Released under the MIT License.</p>
           </div>
 

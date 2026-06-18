@@ -6,7 +6,7 @@ on:
       tag:
         description: "要上传程序包的 Release 标签"
         required: true
-        default: "v0.12"
+        default: "v0.15"
   push:
     tags:
       - "v*"
@@ -86,7 +86,7 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: WordTidy ${{ env.RELEASE_TAG }}
-          body_path: 发布/WordTidy_v0.12_发行说明.md
+          body_path: 发布/WordTidy_v0.15_发行说明.md
           files: release-assets/*.zip
           fail_on_unmatched_files: true
           overwrite_files: true

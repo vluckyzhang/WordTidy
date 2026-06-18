@@ -1,8 +1,6 @@
-# 更新日志
+# WordTidy v0.12
 
-## v0.12 - 2026-06-18
-
-WordTidy v0.12 聚焦多文件队列排版和发布信息完善。
+WordTidy v0.12 聚焦多文件队列排版、发布信息完善和低门槛本地启动。
 
 - 上传控件仅允许选择 Word、Markdown 和 TXT 文件。
 - 支持一次选择或拖拽多个符合要求的文件。
@@ -16,17 +14,8 @@ WordTidy v0.12 聚焦多文件队列排版和发布信息完善。
 - 提供 Windows 和 macOS 程序包，运行可执行文件后会启动本地服务并自动打开浏览器使用。
 - README 保留参与贡献、许可证和联系交流信息，仅移除发布第一版说明。
 
-## v0.1 - 2026-06-18
+程序包说明：
 
-WordTidy 首个开源版本。
-
-- 提供 React + TypeScript + Vite 前端和 FastAPI 后端。
-- 支持 `.docx`、`.doc`、`.txt`、`.md` 输入。
-- 支持输出 `.docx` 和 PDF。
-- 内置论文排版预设，覆盖页面、正文、标题、题注、目录、公式、图表、页码等规则。
-- 支持标题级别动态增删，一级标题保留不可移除。
-- 支持本机字体懒加载选择。
-- 支持拖拽上传。
-- 支持 DeepSeek AI 语义识别模式，AI 仅参与结构识别，最终排版仍由规则引擎执行。
-- 提供赞助作者弹窗、版本检查入口、开源项目地址和版权信息。
-- 使用 MIT License 开源。
+- Windows：解压 `WordTidy_v0.12_Windows_可执行包.zip` 后运行 `WordTidy.exe`。
+- macOS：解压 `WordTidy_v0.12_macOS_可执行包.zip` 后运行 `WordTidy`。
+- `.doc` 转 `.docx`、`.docx` 转 PDF 仍需要本机安装 LibreOffice。

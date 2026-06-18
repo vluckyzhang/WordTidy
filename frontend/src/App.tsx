@@ -831,18 +831,21 @@ function App() {
             <div className="meta-links">
               <a href={REPOSITORY_URL} target="_blank" rel="noreferrer">
                 <Github size={15} aria-hidden="true" />
-                开源项目地址
+                项目地址
                 <ExternalLink size={13} aria-hidden="true" />
-              </a>
-              <a href={`mailto:${CONTACT_EMAIL}`}>
-                <Mail size={15} aria-hidden="true" />
-                联系作者
               </a>
               <button type="button" onClick={() => setIsSponsorOpen(true)}>
                 <HeartHandshake size={15} aria-hidden="true" />
                 赞助作者
               </button>
             </div>
+            <a className="contact-card" href={`mailto:${CONTACT_EMAIL}`}>
+              <Mail size={16} aria-hidden="true" />
+              <span>
+                <strong>联系作者</strong>
+                <small>{CONTACT_EMAIL}</small>
+              </span>
+            </a>
             <p className="copyright">Copyright © 2026 vluckyzhang. Released under the MIT License.</p>
           </div>
 

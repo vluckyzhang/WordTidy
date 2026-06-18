@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 from typing import Literal
@@ -10,6 +12,7 @@ from urllib.parse import quote
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from app.presets import DEFAULT_RULES, merge_rules
@@ -139,3 +142,25 @@ def _parse_rules(rules_json: str | None) -> dict | None:
     if not isinstance(parsed, dict):
         raise HTTPException(status_code=400, detail="规则 JSON 顶层必须是对象。")
     return parsed
+
+
+def _frontend_static_dir() -> Path | None:
+    candidates: list[Path] = []
+    configured = os.getenv("WORDTIDY_STATIC_DIR")
+    if configured:
+        candidates.append(Path(configured))
+    bundle_base = getattr(sys, "_MEIPASS", None)
+    if bundle_base:
+        candidates.append(Path(bundle_base) / "frontend_dist")
+    project_root = Path(__file__).resolve().parents[2]
+    candidates.append(project_root / "frontend" / "dist")
+
+    for candidate in candidates:
+        if (candidate / "index.html").is_file():
+            return candidate
+    return None
+
+
+static_dir = _frontend_static_dir()
+if static_dir:
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")

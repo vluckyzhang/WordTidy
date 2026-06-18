@@ -102,7 +102,7 @@ def main() -> None:
     if zip_path.exists():
         zip_path.unlink()
     _zip_directory(package_root, zip_path)
-    print(zip_path)
+    _safe_print(str(zip_path))
 
 
 def _default_platform() -> str:
@@ -115,8 +115,12 @@ def _run(command: list[str], cwd: Path) -> None:
     resolved = shutil.which(command[0])
     if resolved:
         command = [resolved, *command[1:]]
-    print(" ".join(command))
+    _safe_print(" ".join(command))
     subprocess.run(command, cwd=cwd, check=True)
+
+
+def _safe_print(value: str) -> None:
+    print(value.encode("ascii", "backslashreplace").decode("ascii"))
 
 
 def _write_readme(package_root: Path, platform: str) -> None:

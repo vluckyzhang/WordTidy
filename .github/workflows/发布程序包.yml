@@ -28,6 +28,7 @@ jobs:
             package_os: macos
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      PYTHONUTF8: "1"
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -40,7 +41,7 @@ jobs:
       - name: 设置 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 

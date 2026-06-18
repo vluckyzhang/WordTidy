@@ -69,8 +69,8 @@ flowchart LR
 
 从 GitHub Releases 下载对应平台程序包：
 
-- Windows：解压 `WordTidy_v0.12_Windows_可执行包.zip`，运行 `WordTidy.exe`。
-- macOS：解压 `WordTidy_v0.12_macOS_可执行包.zip`，运行 `WordTidy`。
+- Windows：解压 `WordTidy_v0.12_Windows_executable.zip`，运行 `WordTidy.exe`。
+- macOS：解压 `WordTidy_v0.12_macOS_executable.zip`，运行 `WordTidy`。
 
 程序启动后会自动打开浏览器访问本地 WordTidy。使用完成后关闭启动窗口即可停止服务。
 

@@ -16,6 +16,6 @@ WordTidy v0.12 聚焦多文件队列排版、发布信息完善和低门槛本�
 
 程序包说明：
 
-- Windows：解压 `WordTidy_v0.12_Windows_可执行包.zip` 后运行 `WordTidy.exe`。
-- macOS：解压 `WordTidy_v0.12_macOS_可执行包.zip` 后运行 `WordTidy`。
+- Windows：解压 `WordTidy_v0.12_Windows_executable.zip` 后运行 `WordTidy.exe`。
+- macOS：解压 `WordTidy_v0.12_macOS_executable.zip` 后运行 `WordTidy`。
 - `.doc` 转 `.docx`、`.docx` 转 PDF 仍需要本机安装 LibreOffice。

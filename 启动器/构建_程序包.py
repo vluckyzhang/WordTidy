@@ -97,7 +97,7 @@ def main() -> None:
         raise SystemExit("PyInstaller 未生成 WordTidy 目录。")
 
     _write_readme(package_root, platform)
-    zip_name = f"WordTidy_v{version}_{'Windows' if platform == 'windows' else 'macOS'}_可执行包.zip"
+    zip_name = f"WordTidy_v{version}_{'Windows' if platform == 'windows' else 'macOS'}_executable.zip"
     zip_path = RELEASE_DIR / zip_name
     if zip_path.exists():
         zip_path.unlink()

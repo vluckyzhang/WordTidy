@@ -1,0 +1,2 @@
+"""WordTidy API package."""
+

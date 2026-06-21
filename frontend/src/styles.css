@@ -141,6 +141,7 @@ h3 {
 .workspace {
   display: grid;
   grid-template-columns: minmax(280px, 352px) minmax(0, 1fr);
+  align-items: start;
   gap: 18px;
   max-width: 1360px;
   margin: 0 auto;
@@ -220,6 +221,16 @@ h3 {
 .download-list {
   display: grid;
   gap: 8px;
+}
+
+.file-queue-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(280px, 34vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
 }
 
 .file-queue-header,
@@ -742,6 +753,8 @@ h3 {
 .rules-panel {
   display: grid;
   grid-template-rows: auto auto minmax(520px, calc(100vh - 184px));
+  align-self: start;
+  width: 100%;
   min-height: 620px;
   overflow: hidden;
 }
@@ -1178,6 +1191,10 @@ textarea:focus,
 
   .rule-tabs {
     grid-template-columns: 1fr;
+  }
+
+  .file-queue-list {
+    max-height: 38vh;
   }
 
   .preview-grid {

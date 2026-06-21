@@ -13,6 +13,21 @@ class DeepSeekResult(dict[int, str]):
     pass
 
 
+VALID_LABELS = {
+    "heading1",
+    "heading2",
+    "heading3",
+    "heading4",
+    "heading5",
+    "heading6",
+    "heading7",
+    "heading8",
+    "caption",
+    "body",
+}
+DEFAULT_MODEL = "deepseek-v4-flash"
+
+
 async def classify_docx_with_deepseek(docx_path: Path, api_key: str | None = None) -> tuple[DeepSeekResult, list[str]]:
     api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
@@ -23,16 +38,18 @@ async def classify_docx_with_deepseek(docx_path: Path, api_key: str | None = Non
         return DeepSeekResult(), ["文档中没有可供 AI 识别的段落。"]
 
     payload = {
-        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "model": _deepseek_model(),
         "temperature": 0,
+        "max_tokens": int(os.getenv("DEEPSEEK_MAX_TOKENS", "4096")),
         "response_format": {"type": "json_object"},
         "messages": [
             {
                 "role": "system",
                 "content": (
-                    "你是 Word 文档结构识别器。只返回 JSON。"
+                    "你是 Word 文档结构识别器。只返回 JSON 对象。"
                     "把段落分类为 heading1、heading2、heading3、heading4、heading5、heading6、heading7、heading8、caption、body。"
                     "不要生成 Word 内容，不要改写原文。"
+                    '输出示例：{"paragraphs":[{"index":0,"type":"heading1"},{"index":1,"type":"body"}]}'
                 ),
             },
             {
@@ -62,18 +79,7 @@ async def classify_docx_with_deepseek(docx_path: Path, api_key: str | None = Non
         response.raise_for_status()
 
     content = response.json()["choices"][0]["message"]["content"]
-    parsed = json.loads(content)
-    labels = DeepSeekResult()
-    for item in parsed.get("paragraphs", []):
-        try:
-            index = int(item["index"])
-            label = str(item["type"]).strip()
-        except (KeyError, TypeError, ValueError):
-            continue
-        if label in {"heading1", "heading2", "heading3", "heading4", "heading5", "heading6", "heading7", "heading8", "caption", "body"}:
-            labels[index] = label
-
-    return labels, [f"AI 已识别 {len(labels)} 个段落。"]
+    return _parse_deepseek_labels(content)
 
 
 async def test_deepseek_connection(api_key: str | None = None) -> tuple[bool, str]:
@@ -82,7 +88,7 @@ async def test_deepseek_connection(api_key: str | None = None) -> tuple[bool, st
         return False, "未提供 DeepSeek API key。"
 
     payload = {
-        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "model": _deepseek_model(),
         "temperature": 0,
         "max_tokens": 4,
         "messages": [{"role": "user", "content": "ping"}],
@@ -102,6 +108,72 @@ async def test_deepseek_connection(api_key: str | None = None) -> tuple[bool, st
         return False, f"连接失败：{exc}"
 
     return True, "DeepSeek API key 可用。"
+
+
+def _deepseek_model() -> str:
+    return os.getenv("DEEPSEEK_MODEL", DEFAULT_MODEL)
+
+
+def _parse_deepseek_labels(content: str | None) -> tuple[DeepSeekResult, list[str]]:
+    labels = DeepSeekResult()
+    if not content or not content.strip():
+        return labels, ["DeepSeek 返回内容为空，AI 模式已回退为本地启发式识别。"]
+
+    try:
+        parsed = json.loads(_strip_json_fence(content))
+    except json.JSONDecodeError as exc:
+        return labels, [f"DeepSeek 返回内容不是有效 JSON（{exc.msg}），AI 模式已回退为本地启发式识别。"]
+
+    items = _extract_label_items(parsed)
+    if items is None:
+        return labels, ["DeepSeek 返回 JSON 未包含 paragraphs 数组，AI 模式已回退为本地启发式识别。"]
+
+    skipped = 0
+    for item in items:
+        if not isinstance(item, dict):
+            skipped += 1
+            continue
+        try:
+            index = int(item["index"])
+            label = str(item.get("type") or item.get("label") or "").strip()
+        except (KeyError, TypeError, ValueError):
+            skipped += 1
+            continue
+        if label in VALID_LABELS:
+            labels[index] = label
+        else:
+            skipped += 1
+
+    warnings = [f"AI 已识别 {len(labels)} 个段落。"]
+    if skipped:
+        warnings.append(f"DeepSeek 返回中有 {skipped} 条段落标签无效，已忽略。")
+    return labels, warnings
+
+
+def _strip_json_fence(content: str) -> str:
+    stripped = content.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.splitlines()
+    if len(lines) >= 3 and lines[0].lstrip("`").strip().lower() in {"json", ""} and lines[-1].strip() == "```":
+        return "\n".join(lines[1:-1]).strip()
+    return stripped
+
+
+def _extract_label_items(parsed: Any) -> list[Any] | None:
+    if isinstance(parsed, list):
+        return parsed
+    if not isinstance(parsed, dict):
+        return None
+    for key in ("paragraphs", "items", "results", "labels"):
+        value = parsed.get(key)
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            return [{"index": index, "type": label} for index, label in value.items()]
+    if "index" in parsed and ("type" in parsed or "label" in parsed):
+        return [parsed]
+    return None
 
 
 def _extract_paragraphs(docx_path: Path) -> list[dict[str, Any]]:

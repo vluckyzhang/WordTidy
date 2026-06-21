@@ -22,7 +22,7 @@ from app.services.document_importer import text_to_docx
 from app.services.fonts import list_installed_fonts
 from app.services.formatter import format_docx
 
-app = FastAPI(title="WordTidy API", version="0.15")
+app = FastAPI(title="WordTidy API", version="0.16")
 
 app.add_middleware(
     CORSMiddleware,

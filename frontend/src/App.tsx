@@ -30,6 +30,7 @@ import {
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import localDefaultRules from "./默认规则";
 
 type OutputFormat = "docx" | "pdf";
 type Mode = "standard" | "ai";
@@ -191,13 +192,14 @@ type FontLoaderState = {
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
-const APP_VERSION = "0.15";
+const APP_VERSION = "0.16";
 const REPOSITORY_URL = "https://github.com/vluckyzhang/WordTidy";
 const TAGS_API = "https://api.github.com/repos/vluckyzhang/WordTidy/tags?per_page=1";
 const CONTACT_EMAIL = "vluckyzhang@163.com";
 const PROJECT_SLOGAN = "浏览器轻 UI + 后端 Word 排版引擎，上传文档，选择规则，输出规范的 Word 或 PDF。";
 const DOCUMENT_FILE_ACCEPT = ".doc,.docx,.md,.txt,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/plain";
 const ALLOWED_DOCUMENT_EXTENSIONS = new Set([".doc", ".docx", ".md", ".txt"]);
+const LOCAL_DEFAULT_RULES = localDefaultRules as FormattingRules;
 
 const sponsorAssets = [
   { label: "微信赞助", src: "/赞助与社群/微信收款码.png" },
@@ -311,7 +313,15 @@ function App() {
       setRulesAndText(loadedRules);
       setDefaultRules(cloneRules(loadedRules));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "默认规则加载失败");
+      const fallbackRules = cloneRules(LOCAL_DEFAULT_RULES);
+      setRulesAndText(fallbackRules);
+      setDefaultRules(cloneRules(fallbackRules));
+      setWarnings((current) =>
+        current.includes("后端默认规则接口暂不可用，已使用本地内置默认规则。")
+          ? current
+          : ["后端默认规则接口暂不可用，已使用本地内置默认规则。", ...current]
+      );
+      setError("");
     }
   }
 
@@ -714,25 +724,27 @@ function App() {
                 <span>排版队列</span>
                 <small>{queuedFiles.length} 个文件</small>
               </div>
-              {queuedFiles.map((item) => (
-                <article className={`queue-file is-${item.status}`} key={item.id}>
-                  <FileText size={18} aria-hidden="true" />
-                  <span>
-                    <strong>{item.file.name}</strong>
-                    <small>{formatBytes(item.file.size)} · {queueStatusLabel(item.status)}</small>
-                    {item.message && <small className={item.status === "failed" ? "queue-message is-error" : "queue-message"}>{item.message}</small>}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeQueuedFile(item.id)}
-                    disabled={isLoading}
-                    aria-label={`删除 ${item.file.name}`}
-                    title="删除文件"
-                  >
-                    <X size={16} aria-hidden="true" />
-                  </button>
-                </article>
-              ))}
+              <div className="file-queue-list">
+                {queuedFiles.map((item) => (
+                  <article className={`queue-file is-${item.status}`} key={item.id}>
+                    <FileText size={18} aria-hidden="true" />
+                    <span>
+                      <strong>{item.file.name}</strong>
+                      <small>{formatBytes(item.file.size)} · {queueStatusLabel(item.status)}</small>
+                      {item.message && <small className={item.status === "failed" ? "queue-message is-error" : "queue-message"}>{item.message}</small>}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeQueuedFile(item.id)}
+                      disabled={isLoading}
+                      aria-label={`删除 ${item.file.name}`}
+                      title="删除文件"
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  </article>
+                ))}
+              </div>
             </div>
           )}
 

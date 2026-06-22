@@ -16,6 +16,7 @@ logs/
 output/
 验证输出/
 素材/
+.learnings/
 
 .env
 .env.*

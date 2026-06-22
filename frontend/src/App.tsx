@@ -20,6 +20,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Server,
   Settings2,
   SlidersHorizontal,
   Sigma,
@@ -40,6 +41,7 @@ type RuleTab = "preview" | "settings" | "json";
 type RuleCategory = "page" | "body" | "headings" | "caption" | "directory" | "formula" | "visuals" | "pageNumber";
 type FontSizeUnit = "pt" | "word";
 type FormulaFormat = "linear" | "professional";
+type BackendConnectionStatus = "checking" | "connected" | "disconnected";
 type DeepSeekConnectionStatus = "idle" | "checking" | "connected" | "failed";
 type QueueFileStatus = "pending" | "processing" | "done" | "failed";
 
@@ -192,7 +194,7 @@ type FontLoaderState = {
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
-const APP_VERSION = "0.16";
+const APP_VERSION = "0.17";
 const REPOSITORY_URL = "https://github.com/vluckyzhang/WordTidy";
 const TAGS_API = "https://api.github.com/repos/vluckyzhang/WordTidy/tags?per_page=1";
 const CONTACT_EMAIL = "vluckyzhang@163.com";
@@ -200,6 +202,7 @@ const PROJECT_SLOGAN = "浏览器轻 UI + 后端 Word 排版引擎，上传文�
 const DOCUMENT_FILE_ACCEPT = ".doc,.docx,.md,.txt,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/plain";
 const ALLOWED_DOCUMENT_EXTENSIONS = new Set([".doc", ".docx", ".md", ".txt"]);
 const LOCAL_DEFAULT_RULES = localDefaultRules as FormattingRules;
+const BACKEND_UNAVAILABLE_MESSAGE = "后端未连接，请启动 FastAPI 服务后重试。";
 
 const sponsorAssets = [
   { label: "微信赞助", src: "/赞助与社群/微信收款码.png" },
@@ -272,6 +275,9 @@ function App() {
   const [error, setError] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [downloads, setDownloads] = useState<DownloadState[]>([]);
+  const [backendStatus, setBackendStatus] = useState<BackendConnectionStatus>("checking");
+  const [backendStatusMessage, setBackendStatusMessage] = useState("正在检测后端连接");
+  const [isCheckingBackend, setIsCheckingBackend] = useState(false);
   const [deepseekStatus, setDeepseekStatus] = useState<DeepSeekConnectionStatus>("idle");
   const [deepseekStatusMessage, setDeepseekStatusMessage] = useState("");
   const [installedFonts, setInstalledFonts] = useState<string[]>([]);
@@ -289,6 +295,14 @@ function App() {
   }, []);
 
   useEffect(() => {
+    void checkBackendConnection();
+    const timer = window.setInterval(() => {
+      void checkBackendConnection(false);
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (mode === "ai") {
       void checkDeepSeekConnection(false);
     }
@@ -301,13 +315,16 @@ function App() {
     };
   }, []);
 
-  const canSubmit = useMemo(() => queuedFiles.length > 0 && Boolean(rules) && !isLoading, [queuedFiles.length, rules, isLoading]);
+  const canSubmit = useMemo(
+    () => queuedFiles.length > 0 && Boolean(rules) && !isLoading && backendStatus === "connected",
+    [queuedFiles.length, rules, isLoading, backendStatus]
+  );
 
   async function loadDefaultRules() {
     try {
       const response = await fetch(`${API_BASE}/api/rules/default`);
       if (!response.ok) {
-        throw new Error("默认规则加载失败");
+        throw new Error(await readError(response));
       }
       const loadedRules = (await response.json()) as FormattingRules;
       setRulesAndText(loadedRules);
@@ -333,13 +350,13 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/api/fonts`);
       if (!response.ok) {
-        throw new Error("字体列表加载失败");
+        throw new Error(await readError(response));
       }
       const body = await response.json();
       setInstalledFonts(Array.isArray(body.fonts) ? body.fonts : []);
       setFontsLoaded(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "字体列表加载失败");
+      setError(err instanceof Error ? normalizeBackendConnectionError(err) : "字体列表加载失败");
     } finally {
       setIsLoadingFonts(false);
     }
@@ -515,6 +532,44 @@ function App() {
     URL.revokeObjectURL(url);
   }
 
+  async function checkBackendConnection(showChecking = true) {
+    if (showChecking) {
+      setIsCheckingBackend(true);
+      setBackendStatus("checking");
+      setBackendStatusMessage("正在检测后端连接");
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 4000);
+    try {
+      const response = await fetch(`${API_BASE}/api/health`, {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        const detail = await readError(response);
+        throw new Error(detail === `请求失败：${response.status}` && response.status >= 500 ? BACKEND_UNAVAILABLE_MESSAGE : detail);
+      }
+      const body = await response.json().catch(() => null);
+      if (body?.status !== "ok") {
+        throw new Error("后端健康检查返回异常。");
+      }
+      setBackendStatus("connected");
+      setBackendStatusMessage("FastAPI 后端已连接");
+      return true;
+    } catch (err) {
+      const message = normalizeBackendConnectionError(err);
+      setBackendStatus("disconnected");
+      setBackendStatusMessage(message);
+      return false;
+    } finally {
+      window.clearTimeout(timeout);
+      if (showChecking) {
+        setIsCheckingBackend(false);
+      }
+    }
+  }
+
   async function checkDeepSeekConnection(showInlineMessage = false) {
     setIsTestingApiKey(true);
     setDeepseekStatus("checking");
@@ -525,9 +580,7 @@ function App() {
     }
     const formData = new FormData();
     const apiKey = deepseekApiKey.trim();
-    if (apiKey) {
-      formData.append("api_key", apiKey);
-    }
+    formData.append("api_key", apiKey);
     try {
       const response = await fetch(`${API_BASE}/api/deepseek/test`, {
         method: "POST",
@@ -581,6 +634,11 @@ function App() {
     }
     if (!rules) {
       setError("排版规则尚未加载");
+      return;
+    }
+    const backendReady = await checkBackendConnection();
+    if (!backendReady) {
+      setError("后端未连接，无法排版。请启动 FastAPI 后端服务后重试。");
       return;
     }
 
@@ -641,7 +699,11 @@ function App() {
           ));
         } catch (err) {
           failedCount += 1;
-          const message = err instanceof Error ? err.message : "排版处理失败";
+          const message = err instanceof Error ? normalizeBackendConnectionError(err) : "排版处理失败";
+          if (isBackendUnavailableMessage(message)) {
+            setBackendStatus("disconnected");
+            setBackendStatusMessage(BACKEND_UNAVAILABLE_MESSAGE);
+          }
           setQueuedFiles((current) => current.map((candidate) =>
             candidate.id === item.id ? { ...candidate, status: "failed", message } : candidate
           ));
@@ -668,11 +730,32 @@ function App() {
               <h1>WordTidy</h1>
               <span className="brand-slogan">{PROJECT_SLOGAN}</span>
             </div>
-            {mode === "ai" && (
+          </div>
+        </div>
+        <div className="topbar-actions">
+          <span
+            className={`status ${backendStatus === "connected" ? "is-ready" : ""} ${backendStatus === "disconnected" ? "is-error" : ""}`}
+            title={backendStatusMessage}
+          >
+            {backendStatus === "checking" ? <Loader2 className="spin" size={15} aria-hidden="true" /> : <Server size={15} aria-hidden="true" />}
+            {backendStatus === "checking" ? "后端检测中" : backendStatus === "connected" ? "后端已连接" : "后端未连接"}
+          </span>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => void checkBackendConnection()}
+            disabled={isCheckingBackend}
+            title="刷新后端连接状态"
+          >
+            {isCheckingBackend ? <Loader2 className="spin" size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
+          </button>
+          {mode === "ai" && (
+            <>
               <span
                 className={`status ${deepseekStatus === "connected" ? "is-ready" : ""} ${deepseekStatus === "failed" ? "is-error" : ""}`}
                 title={deepseekStatusMessage}
               >
+                {deepseekStatus === "checking" ? <Loader2 className="spin" size={15} aria-hidden="true" /> : <Sparkles size={15} aria-hidden="true" />}
                 {deepseekStatus === "checking"
                   ? "DeepSeek API 检测中"
                   : deepseekStatus === "connected"
@@ -681,20 +764,18 @@ function App() {
                       ? "DeepSeek API 未连接"
                       : "DeepSeek API 待检测"}
               </span>
-            )}
-          </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => void checkDeepSeekConnection(false)}
+                disabled={isTestingApiKey}
+                title="刷新 DeepSeek API 状态"
+              >
+                {isTestingApiKey ? <Loader2 className="spin" size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
+              </button>
+            </>
+          )}
         </div>
-        {mode === "ai" && (
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => void checkDeepSeekConnection(false)}
-            disabled={isTestingApiKey}
-            title="刷新 DeepSeek API 状态"
-          >
-            {isTestingApiKey ? <Loader2 className="spin" size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
-          </button>
-        )}
       </header>
 
       <form className="workspace" onSubmit={onSubmit}>
@@ -1711,14 +1792,39 @@ function SelectField<T extends string>({ label, value, options, onChange }: Sele
 
 async function readError(response: Response): Promise<string> {
   try {
-    const body = await response.json();
-    if (typeof body.detail === "string") {
-      return body.detail;
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const body = await response.json();
+      if (typeof body.detail === "string") {
+        return body.detail;
+      }
+      return JSON.stringify(body.detail ?? body, null, 2);
     }
-    return JSON.stringify(body.detail ?? body, null, 2);
+    const text = (await response.text()).trim();
+    if (isBackendUnavailableMessage(text)) {
+      return BACKEND_UNAVAILABLE_MESSAGE;
+    }
+    if (text) {
+      return text.length > 300 ? `${text.slice(0, 300)}...` : text;
+    }
   } catch {
-    return `请求失败：${response.status}`;
+    if (response.status >= 500) {
+      return BACKEND_UNAVAILABLE_MESSAGE;
+    }
   }
+  return `请求失败：${response.status}`;
+}
+
+function normalizeBackendConnectionError(err: unknown) {
+  if (err instanceof DOMException && err.name === "AbortError") {
+    return "后端连接超时，请确认 FastAPI 服务已启动。";
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  return isBackendUnavailableMessage(message) ? BACKEND_UNAVAILABLE_MESSAGE : message;
+}
+
+function isBackendUnavailableMessage(message: string) {
+  return /后端未连接|Failed to fetch|NetworkError|ECONNREFUSED|ECONNRESET|ERR_CONNECTION|proxy error|http proxy|无法连接|积极拒绝/i.test(message);
 }
 
 function parseWarnings(value: string | null): string[] {

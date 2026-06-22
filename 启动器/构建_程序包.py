@@ -20,7 +20,7 @@ RELEASE_DIR = ROOT / "output" / "release"
 def main() -> None:
     parser = argparse.ArgumentParser(description="构建 WordTidy 桌面启动程序包")
     parser.add_argument("--平台", choices=["windows", "macos"], default=_default_platform())
-    parser.add_argument("--版本", default="v0.16")
+    parser.add_argument("--版本", default="v0.17")
     parser.add_argument("--跳过前端构建", action="store_true")
     args = parser.parse_args()
 

@@ -2,7 +2,7 @@
 
 > 浏览器轻 UI + 后端 Word 排版引擎。上传文档，选择规则，输出规范的 Word 或 PDF。
 
-[![Version](https://img.shields.io/badge/version-0.16-0f766e)](https://github.com/vluckyzhang/WordTidy/releases)
+[![Version](https://img.shields.io/badge/version-0.17-0f766e)](https://github.com/vluckyzhang/WordTidy/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)](backend)
 [![React](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61dafb)](frontend)
@@ -17,7 +17,7 @@
 
 WordTidy 是一个面向论文、报告、制度文件和批量文档整理场景的 Word 自动排版工具。它采用“浏览器轻 UI + 后端文档排版引擎”的结构，前端负责上传、规则编辑和交互，后端负责解析文档、应用确定性排版规则并输出文件。
 
-当前版本号为 `0.16`，重点修复 AI 模式 DeepSeek JSON 解析、默认规则加载兜底和排版队列布局稳定性。
+当前版本号为 `0.17`，重点完善后端连接状态提示、排版前健康检查和本地学习日志忽略规则。
 
 ## 功能亮点
 
@@ -60,8 +60,8 @@ AI：DeepSeek API
 
 从 GitHub Releases 下载对应平台程序包：
 
-- Windows：解压 `WordTidy_v0.16_Windows_executable.zip`，运行 `WordTidy.exe`。
-- macOS：解压 `WordTidy_v0.16_macOS_executable.zip`，运行 `WordTidy`。
+- Windows：解压 `WordTidy_v0.17_Windows_executable.zip`，运行 `WordTidy.exe`。
+- macOS：解压 `WordTidy_v0.17_macOS_executable.zip`，运行 `WordTidy`。
 
 程序启动后会自动打开浏览器访问本地 WordTidy。使用完成后关闭启动窗口即可停止服务。
 
